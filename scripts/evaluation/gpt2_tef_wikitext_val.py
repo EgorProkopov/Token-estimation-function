@@ -196,6 +196,8 @@ def _init_tef_model(
     tef_cumulative_threshold = tef_scorer_config.get("cumulative_threshold", 0.95)
     tef_dropout = tef_scorer_config.get("dropout", 0.0)
     tef_backend = tef_scorer_config.get("backend", "torch")
+    tef_mask_warmup_steps = tef_scorer_config.get("mask_warmup_steps", 0)
+    tef_disable_mask_on_val = tef_scorer_config.get("disable_mask_on_val", True)
 
     return GPT2TEFLightningModule(
         model_name=model_config["model_name"],
@@ -212,6 +214,8 @@ def _init_tef_model(
         tef_dropout=tef_dropout,
         tef_cumulative_threshold=tef_cumulative_threshold,
         tef_backend=tef_backend,
+        tef_mask_warmup_steps=tef_mask_warmup_steps,
+        tef_disable_mask_on_val=tef_disable_mask_on_val,
     )
 
 

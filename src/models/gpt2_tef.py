@@ -22,17 +22,36 @@ class TEFTransformerBlock(nn.Module):
         dropout: float = 0.0,
         cumulative_threshold: float = 0.95,
         backend: str = "torch",
+        keep_mask_mode: str = "eval",
     ):
         super().__init__()
         self.block = block
         self.last_gates: Optional[torch.Tensor] = None
         self.last_logits: Optional[torch.Tensor] = None
+        self.keep_mask_mode = keep_mask_mode
         self.scorer = TEFScorer(
             hidden_size=hidden_size,
             dropout=dropout,
             cumulative_threshold=cumulative_threshold,
             backend=backend,
         )
+
+    def set_keep_mask_mode(self, mode: str) -> None:
+        """
+        Controls when keep_mask is applied:
+        - "off": never apply
+        - "eval": apply only when not training (default behavior)
+        - "train": always apply, including during training
+        """
+        self.keep_mask_mode = mode
+
+    def _use_keep_mask(self) -> bool:
+        if self.keep_mask_mode == "off":
+            return False
+        if self.keep_mask_mode == "train":
+            return True
+        # default/"eval"
+        return not self.training
 
     @staticmethod
     def _token_mask_from_attention(attention_mask: Optional[torch.Tensor]) -> Optional[torch.Tensor]:
@@ -110,17 +129,18 @@ class TEFTransformerBlock(nn.Module):
         **kwargs,
     ):
         token_mask = self._token_mask_from_attention(attention_mask)
+        apply_keep_mask = self._use_keep_mask()
         logits, gates, keep_mask = self.scorer(
             hidden_states,
             attention_mask=token_mask,
-            inference=not self.training,
+            inference=apply_keep_mask,
         )
         self.last_logits = logits
         self.last_gates = gates
 
         gated_states = hidden_states * gates.unsqueeze(-1)
         updated_attention = attention_mask
-        if keep_mask is not None:
+        if apply_keep_mask and keep_mask is not None:
             gated_states = gated_states * keep_mask.unsqueeze(-1)
             updated_attention = self._apply_keep_mask_to_attention(
                 attention_mask=attention_mask,
@@ -150,15 +170,21 @@ class GPT2TEF(nn.Module):
         tef_dropout: float = 0.0,
         tef_cumulative_threshold: float = 0.95,
         tef_backend: str = "torch",
+        keep_mask_mode: str = "eval",
     ):
         super().__init__()
         self.model_name = model_name
         self.cache_dir = cache_dir
         self.tef_backend = tef_backend
+        self.keep_mask_mode = keep_mask_mode
         self.model: GPT2LMHeadModel
         self.tokenizer: GPT2TokenizerFast
         self.model, self.tokenizer = self.load_from_hub(model_name=model_name, cache_dir=cache_dir)
-        self._attach_tef_scorers(dropout=tef_dropout, cumulative_threshold=tef_cumulative_threshold)
+        self._attach_tef_scorers(
+            dropout=tef_dropout,
+            cumulative_threshold=tef_cumulative_threshold,
+            keep_mask_mode=keep_mask_mode,
+        )
 
     @staticmethod
     def load_from_hub(
@@ -175,7 +201,7 @@ class GPT2TEF(nn.Module):
 
         return model, tokenizer
 
-    def _attach_tef_scorers(self, dropout: float, cumulative_threshold: float) -> None:
+    def _attach_tef_scorers(self, dropout: float, cumulative_threshold: float, keep_mask_mode: str) -> None:
         hidden_size = getattr(self.model.config, "hidden_size", None) or getattr(self.model.config, "n_embd")
         tef_blocks = []
         for block in self.model.transformer.h:
@@ -186,9 +212,16 @@ class GPT2TEF(nn.Module):
                     dropout=dropout,
                     cumulative_threshold=cumulative_threshold,
                     backend=self.tef_backend,
+                    keep_mask_mode=keep_mask_mode,
                 )
             )
         self.model.transformer.h = nn.ModuleList(tef_blocks)
+
+    def set_keep_mask_mode(self, mode: str) -> None:
+        self.keep_mask_mode = mode
+        for block in self.model.transformer.h:
+            if isinstance(block, TEFTransformerBlock):
+                block.set_keep_mask_mode(mode)
 
     def collect_gates(self):
         gates = []

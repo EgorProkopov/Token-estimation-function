@@ -28,6 +28,8 @@ class GPT2TEFLightningModule(AutoregressiveLightningModule):
         tef_dropout: float = 0.0,
         tef_cumulative_threshold: float = 0.95,
         tef_backend: str = "torch",
+        tef_mask_warmup_steps: int = 0,
+        tef_disable_mask_on_val: bool = True,
     ):
         gpt2_tef = GPT2TEF(
             model_name=model_name,
@@ -35,6 +37,7 @@ class GPT2TEFLightningModule(AutoregressiveLightningModule):
             tef_dropout=tef_dropout,
             tef_cumulative_threshold=tef_cumulative_threshold,
             tef_backend=tef_backend,
+            keep_mask_mode="off" if tef_mask_warmup_steps > 0 else "train",
         )
         if compile_model:
             gpt2_tef.model = torch.compile(model=gpt2_tef.model)
@@ -53,9 +56,13 @@ class GPT2TEFLightningModule(AutoregressiveLightningModule):
 
         self.aux_alpha = aux_alpha
         self.aux_loss_fn = GatedL1Loss()
+        self.tef_mask_warmup_steps = tef_mask_warmup_steps
+        self.tef_disable_mask_on_val = tef_disable_mask_on_val
+        self._current_tef_mask_mode: str = "off" if tef_mask_warmup_steps > 0 else "train"
         self.save_hyperparameters(ignore=["tokenizer", "model", "aux_loss_fn"])
 
     def training_step(self, batch, batch_idx):
+        self._update_tef_keep_mask_mode(training=True)
         input_ids, attention_mask, labels = self._prepare_batch(batch)
         outputs = self.forward(
             input_ids=input_ids,
@@ -106,3 +113,54 @@ class GPT2TEFLightningModule(AutoregressiveLightningModule):
             )
 
         return loss
+
+    def validation_step(self, batch, batch_idx):
+        prev_mode = self._set_tef_keep_mask_mode("off" if self.tef_disable_mask_on_val else "eval")
+        input_ids, attention_mask, labels = self._prepare_batch(batch)
+        outputs = self.forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+        )
+        loss = outputs.loss
+
+        self.val_losses.append(loss.detach())
+        self.log("val_loss", loss, prog_bar=False, on_step=False, on_epoch=True)
+        self._log_gate_mean()
+
+        if prev_mode is not None:
+            self._set_tef_keep_mask_mode(prev_mode)
+        return loss
+
+    def _set_tef_keep_mask_mode(self, mode: str) -> Optional[str]:
+        prev = None
+        if hasattr(self.model, "keep_mask_mode"):
+            prev = getattr(self.model, "keep_mask_mode", None)
+        if hasattr(self.model, "set_keep_mask_mode"):
+            self.model.set_keep_mask_mode(mode)
+            self._current_tef_mask_mode = mode
+        return prev
+
+    def _update_tef_keep_mask_mode(self, training: bool) -> None:
+        if not training:
+            return
+        if self.global_step < self.tef_mask_warmup_steps:
+            self._set_tef_keep_mask_mode("off")
+        else:
+            self._set_tef_keep_mask_mode("train")
+
+    def _log_gate_mean(self) -> None:
+        gates = getattr(self.model, "collect_gates", lambda: [])()
+        if not gates:
+            return
+        means = [g.mean() for g in gates if g is not None]
+        if not means:
+            return
+        gate_mean = torch.stack(means).mean().detach()
+        self.log(
+            "val_gate_mean",
+            gate_mean,
+            prog_bar=False,
+            on_step=False,
+            on_epoch=True,
+        )
