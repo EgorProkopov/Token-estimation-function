@@ -21,6 +21,7 @@ class TEFTransformerBlock(nn.Module):
         hidden_size: int,
         dropout: float = 0.0,
         cumulative_threshold: float = 0.95,
+        backend: str = "torch",
     ):
         super().__init__()
         self.block = block
@@ -30,6 +31,7 @@ class TEFTransformerBlock(nn.Module):
             hidden_size=hidden_size,
             dropout=dropout,
             cumulative_threshold=cumulative_threshold,
+            backend=backend,
         )
 
     @staticmethod
@@ -147,10 +149,12 @@ class GPT2TEF(nn.Module):
         cache_dir: Optional[str] = None,
         tef_dropout: float = 0.0,
         tef_cumulative_threshold: float = 0.95,
+        tef_backend: str = "torch",
     ):
         super().__init__()
         self.model_name = model_name
         self.cache_dir = cache_dir
+        self.tef_backend = tef_backend
         self.model: GPT2LMHeadModel
         self.tokenizer: GPT2TokenizerFast
         self.model, self.tokenizer = self.load_from_hub(model_name=model_name, cache_dir=cache_dir)
@@ -181,6 +185,7 @@ class GPT2TEF(nn.Module):
                     hidden_size=hidden_size,
                     dropout=dropout,
                     cumulative_threshold=cumulative_threshold,
+                    backend=self.tef_backend,
                 )
             )
         self.model.transformer.h = nn.ModuleList(tef_blocks)

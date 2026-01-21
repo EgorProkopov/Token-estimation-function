@@ -27,12 +27,14 @@ class GPT2TEFLightningModule(AutoregressiveLightningModule):
         aux_alpha: float = 0.0,
         tef_dropout: float = 0.0,
         tef_cumulative_threshold: float = 0.95,
+        tef_backend: str = "torch",
     ):
         gpt2_tef = GPT2TEF(
             model_name=model_name,
             cache_dir=cache_dir,
             tef_dropout=tef_dropout,
             tef_cumulative_threshold=tef_cumulative_threshold,
+            tef_backend=tef_backend,
         )
         if compile_model:
             gpt2_tef.model = torch.compile(model=gpt2_tef.model)

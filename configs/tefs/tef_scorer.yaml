@@ -1,2 +1,3 @@
 dropout: 0.0
-cumulative_threshold: 0.95
+cumulative_threshold: 0.99
+backend: torch

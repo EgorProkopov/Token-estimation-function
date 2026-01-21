@@ -18,6 +18,7 @@ def train_gpt2_tef(
 
     tef_dropout = tef_scorer_config.get("dropout", 0.0)
     tef_cumulative_threshold = tef_scorer_config.get("cumulative_threshold", 0.95)
+    tef_backend = tef_scorer_config.get("backend", "torch")
     aux_alpha = tef_aux_loss_config.get("alpha", 0.0)
 
     model = GPT2TEFLightningModule(
@@ -34,6 +35,7 @@ def train_gpt2_tef(
         aux_alpha=aux_alpha,
         tef_dropout=tef_dropout,
         tef_cumulative_threshold=tef_cumulative_threshold,
+        tef_backend=tef_backend,
     )
 
     dataset_config = training_config["dataset"]
