@@ -1,0 +1,12 @@
+omegaconf
+matplotlib
+numpy
+torch
+torchvision
+torchmetrics
+transformers
+lightning
+clearml
+datasets
+python-dotenv
+tensorboard

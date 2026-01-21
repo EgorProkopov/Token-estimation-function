@@ -1,0 +1,25 @@
+model:
+  config_path: configs/models/gpt2.yaml
+
+training:
+  config_path: configs/training/gpt2.yaml
+
+evaluation:
+  checkpoint_path: null
+  device: auto
+  seed: 239
+  prompts:
+    - "Deep learning is "
+  prompt_file: null
+  prompt_per_line: false
+  num_samples: 1
+
+generation:
+  max_length: null
+  num_beams: null
+  do_sample: null
+  temperature: null
+  top_k: null
+  top_p: null
+  repetition_penalty: null
+  no_repeat_ngram_size: null

@@ -1,0 +1,12 @@
+model_name: gpt2
+cache_dir: null
+compile_model: true
+generation:
+  max_length: 64
+  num_beams: 1
+  do_sample: true
+  temperature: 1.0
+  top_k: 50
+  top_p: 0.95
+  repetition_penalty: 1.0
+  no_repeat_ngram_size: 0
