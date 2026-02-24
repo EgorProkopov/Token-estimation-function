@@ -11,7 +11,7 @@ from src.tefs_backend.tef_scorer.triton_backend import is_triton_available
 
 MODEL_NAME = "gpt2"
 CACHE_DIR: Optional[str] = None
-DEVICE = "cuda:0"  # "auto", "cpu", "cuda", "cuda:0", etc.
+DEVICE = "cuda:0"  # "auto", "cpu", "cuda", "cuda:0"
 DTYPE = "float32"  # "auto", "float16", "bfloat16", "float32"
 
 TEF_BACKEND = "triton"  # "torch" or "triton"
